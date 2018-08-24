@@ -1,5 +1,5 @@
-from libs.params import Params
-from libs.optimizer import OptimizerGA
+from src.params import Params
+from src.optimizer import OptimizerGA
 
 def generate_nmist_dataset():
     import keras
@@ -56,7 +56,7 @@ def generate_model_ann(params):
 
 # Sample
 # Sample
-def sample_nmist(iterations, path):
+def sample_nmist(iterations, epochs, path):
     train, test = generate_nmist_dataset()
     params = Params(variable_params)
     print(params.optimize_params)
@@ -65,6 +65,7 @@ def sample_nmist(iterations, path):
 
     optimizer = OptimizerGA(train, test, params, generate_model_ann)
     optimizer.verbose_train = 0 
+    optimizer.epochs_train = epochs 
     optimizer.generate_population(10)
     for i in range(0, iterations):
         print("=> Generación ", i)
