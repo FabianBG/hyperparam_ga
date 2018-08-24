@@ -57,6 +57,8 @@ def generate_model_ann(params):
 # Sample
 # Sample
 def sample_nmist(iterations, epochs, path):
+    import numpy as np
+    np.random.seed(1)
     train, test = generate_nmist_dataset()
     params = Params(variable_params)
     print(params.optimize_params)
@@ -73,3 +75,28 @@ def sample_nmist(iterations, epochs, path):
         print(optimizer.population_score())
     print(optimizer.population)
     optimizer.population_save(path)
+
+
+def sample_nmist_paralel(iterations, epochs, path):
+    import numpy as np
+    np.random.seed(1)
+    is_master = False
+    train, test = generate_nmist_dataset()
+    params = Params(variable_params)
+    print(params.optimize_params)
+
+    print(len(train))
+
+    optimizer = OptimizerGA(train, test, params, generate_model_ann)
+    optimizer.verbose_train = 1
+    optimizer.epochs_train = epochs 
+    optimizer.generate_population(2)
+    for i in range(0, iterations):
+        print("=> Generación ", i)
+        is_master = optimizer.evolve_mpi(i == 0, best_prune=0.5) == "master"
+        if is_master: print(optimizer.population_score())
+    if is_master:
+        print(optimizer.population)
+        optimizer.population_save(path)
+    else:
+        print("Slave destroy.")

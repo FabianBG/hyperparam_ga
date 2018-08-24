@@ -1,7 +1,9 @@
 import random
-from libs.params import Params
-from libs.model_facade import ModelFacade
 import json
+
+from src.params import Params
+from src.model_facade import ModelFacade
+
 
 class OptimizerGA():
     
@@ -15,7 +17,7 @@ class OptimizerGA():
         self.verbose_train = 0
         self.batch_train = 64
         self.epochs_train = 1
-
+    
     def population_score(self):
         scores = []
         for p in self.population:
@@ -25,19 +27,17 @@ class OptimizerGA():
     def population_save(self, file="population.txt"):
         text_file = open(file, "w")
         for p in self.population:
-            text_file.write("Score: {}, Acc: {} \n Params: \n".format(p["score"], p["history"].history["acc"]))
+            text_file.write("Score: {}, Acc: {} \n Params: \n".format(p["score"], p["metrics"]["acc"]))
             text_file.write(json.dumps(p["params"]))
             text_file.write("\n")
         text_file.close()
 
     def generate_population(self, size):
         population = []
-        for i in range(0, size):
+        for _ in range(0, size):
             params = self.params.generate_random_params()
-            model = self.model_generator.load(self.model_function, params)
             population.append({
-                "params": params,
-                "model": model
+                "params": params
             })
         self.population = population
         return population
@@ -66,12 +66,13 @@ class OptimizerGA():
             if "history" in value.keys():
                 print("Modelo entrenado previamente.")
                 continue
-            model = value["model"]
-            value["history"] = model.fit(x_train, y_train,
+            model = self.model_generator.load(self.model_function, value["params"])
+            history = model.fit(x_train, y_train,
                             batch_size=self.batch_train,
                             epochs=self.epochs_train,
                             verbose=self.verbose_train,
                             validation_data=(x_test, y_test))
+            value["metrics"] = history.history
             value["score"] = self.model_generator.model_score(value["history"])
 
     def evolve(self, initial_train, best_prune=0.3, random_variety=0.1, mutation_factor=0.3):
@@ -115,3 +116,76 @@ class OptimizerGA():
             # Random mutation
         self.population = best_poplation + childs
         return best_poplation + childs
+    
+    def train_population_paralel(self, world, train, test, epochs=1, batch_size=32, verbose=0):
+        x_train, y_train = train
+        x_test, y_test = test
+
+        # Define array parts
+        assert len(self.population) % world.size == 0, "EL numero de tareas no es divisible para la población"
+        slices =  int(len(self.population) / world.size)
+
+        for index in range(world.rank * slices, (world.rank + 1) * slices):
+            print("Train index %i" % index)
+            value =  self.population[index]
+            model = self.model_generator.load(self.model_function, value["params"])
+            history = model.fit(x_train, y_train,
+                            batch_size=self.batch_train,
+                            epochs=self.epochs_train,
+                            verbose=self.verbose_train,
+                            validation_data=(x_test, y_test))
+            value["score"] = self.model_generator.model_score(history)
+            value["index"] = index
+            value["metrics"] = history.history
+            print("Result ", index, " para ", world.rank)
+            print(value)
+            world.barrier()
+            if world.rank == 0:
+                for rank in range(1, world.size):
+                    result = world.recv(source=rank)
+                    self.population[result["index"]] = result
+            else:
+                world.send(value, dest=0)
+
+    def evolve_mpi(self, initial_train, best_prune=0.5, random_variety=0.1, mutation_factor=0.3):
+        # Initialize_mpi
+        from mpi4py import MPI
+        world = MPI.COMM_WORLD
+        # Initial Train population
+        if initial_train:
+            self.train_population_paralel(world, self.train, self.test)
+        if world.rank == 0:
+            # Sort by score
+            self.population = sorted(self.population, key=lambda model: model["score"], reverse=True)
+            size = len(self.population)
+            prune = int(size * best_prune)
+            variety = int(size * random_variety)
+            # Choose the best
+            best_poplation = self.population[:prune]
+            # Add random values for variety
+            best_poplation = best_poplation + random.sample(self.population[prune:], variety)
+            # Re-populate generating childs
+            
+            n_childs = size - prune - variety
+            childs = []
+            for _ in range(0, n_childs):
+                father = random.choice(best_poplation)
+                mother = random.choice(best_poplation)
+                # Generate child
+                child = self.generate_child(father["params"], mother["params"])
+                # Mutation probability
+                if mutation_factor > random.random():
+                    child = self.mutate(child)
+                child = self.generate_child(father["params"], mother["params"])
+                childs.append({
+                    "params": child
+                })
+                # Random mutation
+            self.population = best_poplation + childs
+            self.population = world.bcast(self.population, root=0)
+
+        self.train_population_paralel(world, self.train, self.test)
+        if world.rank == 0:
+            return "master"
+        else:
+            return "slave"
