@@ -77,7 +77,7 @@ def sample_nmist(iterations, epochs, path):
     optimizer.population_save(path)
 
 
-def sample_nmist_paralel(iterations, epochs, path):
+def sample_nmist_paralel(size, iterations, epochs, path):
     import numpy as np
     np.random.seed(1)
     is_master = False
@@ -88,9 +88,9 @@ def sample_nmist_paralel(iterations, epochs, path):
     print(len(train))
 
     optimizer = OptimizerGA(train, test, params, generate_model_ann)
-    optimizer.verbose_train = 1
+    optimizer.verbose_train = 0
     optimizer.epochs_train = epochs 
-    optimizer.generate_population(2)
+    optimizer.generate_population(size)
     for i in range(0, iterations):
         print("=> Generación ", i)
         is_master = optimizer.evolve_mpi(i == 0, best_prune=0.5) == "master"
