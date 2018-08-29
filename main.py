@@ -53,10 +53,8 @@ def generate_model_ann(params):
         metrics=['accuracy'])
     return model
 
-
-# Sample
-# Sample
-def sample_nmist(iterations, epochs, path):
+def sample_nmist(size, iterations, epochs, path):
+    '''Metodo de ejemplo para ejecución de optimizador de parametros con red neuronal'''
     import numpy as np
     np.random.seed(1)
     train, test = generate_nmist_dataset()
@@ -68,7 +66,7 @@ def sample_nmist(iterations, epochs, path):
     optimizer = OptimizerGA(train, test, params, generate_model_ann)
     optimizer.verbose_train = 0 
     optimizer.epochs_train = epochs 
-    optimizer.generate_population(10)
+    optimizer.generate_population(size)
     for i in range(0, iterations):
         print("=> Generación ", i)
         optimizer.evolve(i == 0)
@@ -77,15 +75,13 @@ def sample_nmist(iterations, epochs, path):
     optimizer.population_save(path)
 
 
-def sample_nmist_paralel(size, iterations, epochs, path):
+def sample_nmist_parallel(size, iterations, epochs, path):
+    '''Metodo de ejemplo para ejecución de optimizador de parametros en paralelo con red neuronal'''
     import numpy as np
     np.random.seed(1)
     is_master = False
     train, test = generate_nmist_dataset()
     params = Params(variable_params)
-    print(params.optimize_params)
-
-    print(len(train))
 
     optimizer = OptimizerGA(train, test, params, generate_model_ann)
     optimizer.verbose_train = 0

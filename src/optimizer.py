@@ -117,7 +117,7 @@ class OptimizerGA():
         self.population = best_poplation + childs
         return best_poplation + childs
     
-    def train_population_paralel(self, world, train, test, epochs=1, batch_size=32, verbose=0):
+    def train_population_parallel(self, world, train, test, epochs=1, batch_size=32, verbose=0):
         x_train, y_train = train
         x_test, y_test = test
 
@@ -153,7 +153,7 @@ class OptimizerGA():
         world = MPI.COMM_WORLD
         # Initial Train population
         if initial_train:
-            self.train_population_paralel(world, self.train, self.test)
+            self.train_population_parallel(world, self.train, self.test)
         if world.rank == 0:
             # Sort by score
             self.population = sorted(self.population, key=lambda model: model["score"], reverse=True)
@@ -184,7 +184,7 @@ class OptimizerGA():
             self.population = best_poplation + childs
             self.population = world.bcast(self.population, root=0)
 
-        self.train_population_paralel(world, self.train, self.test)
+        self.train_population_parallel(world, self.train, self.test)
         if world.rank == 0:
             return "master"
         else:
